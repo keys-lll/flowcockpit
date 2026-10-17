@@ -27,7 +27,9 @@ jobs:
         with:
           cmdline-tools-version: 11076708
       - name: Install Android API 37
-        run: sdkmanager "platforms;android-37" "platform-tools"
+        run: |
+         sdkmanager --install "platforms;android-37.0"
+         sdkmanager --install "platform-tools"
       - name: Build debug APK
         working-directory: A1
         run: |
