@@ -23,7 +23,9 @@ jobs:
           cache: gradle
           cache-dependency-path: A1/**/*.gradle.kts
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: 11076708
       - name: Install Android API 37
         run: sdkmanager "platforms;android-37" "platform-tools"
       - name: Build debug APK
