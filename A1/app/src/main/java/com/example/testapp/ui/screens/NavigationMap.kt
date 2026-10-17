@@ -115,10 +115,30 @@ fun NavigationMap(
         lastFixElapsedMs = SystemClock.elapsedRealtime()
     })
 
+    // 地圖標記依最新定位更新；路線只有首度 GPS 定位或明顯移動後才重新規劃。
+    var routingOrigin by remember { mutableStateOf(DEMO_ORIGIN) }
+    var routingFromGps by remember { mutableStateOf(false) }
+    var lastRerouteMs by remember { mutableStateOf(0L) }
+    LaunchedEffect(origin, gpsFix != null) {
+        val hasGps = gpsFix != null
+        val distance = FloatArray(1)
+        Location.distanceBetween(
+            routingOrigin.latitude, routingOrigin.longitude,
+            origin.latitude, origin.longitude, distance,
+        )
+        val now = SystemClock.elapsedRealtime()
+        if ((hasGps && !routingFromGps) ||
+            (hasGps && distance[0] >= 150f && now - lastRerouteMs >= 30_000L)) {
+            routingOrigin = origin
+            routingFromGps = true
+            lastRerouteMs = now
+        }
+    }
+
     var route by remember { mutableStateOf<PlannedRoute?>(null) }
     var resolvedDestination by remember { mutableStateOf<GeoPoint?>(destinationPoint) }
     var routingMessage by remember { mutableStateOf("準備規劃路線") }
-    LaunchedEffect(destination, destinationPoint, origin) {
+    LaunchedEffect(destination, destinationPoint, routingOrigin) {
         route = null
         resolvedDestination = destinationPoint
         if (destination.isNullOrBlank()) {
@@ -126,7 +146,7 @@ fun NavigationMap(
             return@LaunchedEffect
         }
         routingMessage = "正在查詢真實道路路線…"
-        when (val result = repository.plan(origin, destination, destinationPoint)) {
+        when (val result = repository.plan(routingOrigin, destination, destinationPoint)) {
             is RouteResult.Success -> {
                 route = result.route
                 resolvedDestination = result.route.destination
