@@ -328,6 +328,21 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+@app.get("/api/connectivity")
+async def connectivity():
+    """AI Box 可連線不等於雲端可用；以 E /health 回報實際服務狀態。"""
+    cloud = "unavailable"
+    try:
+        async with httpx.AsyncClient(timeout=2.5) as client:
+            response = await client.get(f"{CLOUD_API_URL.rstrip('/')}/health")
+            if response.is_success:
+                status = response.json().get("status")
+                cloud = "ready" if status == "ready" else "offline_only"
+    except (httpx.HTTPError, ValueError, KeyError):
+        pass
+    return {"aibox": "connected", "cloud": cloud}
+
+
 
 async def apply_cloud_comparison(task_id: str, base_version: int) -> bool:
     """向 E 取得比較文字；只有任務仍停在請求版本時才套用，避免過期回覆覆蓋新操作。"""
