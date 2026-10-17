@@ -4,6 +4,8 @@ import com.example.testapp.model.UserAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -41,6 +43,7 @@ class FakeAiBox(private val scope: CoroutineScope) : AiBoxGateway {
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     override val messages: Flow<String> = _messages.asSharedFlow()
+    override val connectivity: StateFlow<Pair<Boolean, String>> = MutableStateFlow(false to "未使用 AI Box")
 
     private var taskSeq = 1
     private var version = 0
