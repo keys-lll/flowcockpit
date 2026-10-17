@@ -57,6 +57,8 @@ fun CockpitScreen(controller: CockpitController, modifier: Modifier = Modifier) 
         micState = controller.micState,
         destination = controller.destination,
         destinationPoint = controller.destinationPoint,
+        suggestions = controller.suggestedPlaces,
+        connectivity = controller.connectivity,
         onNavigateTo = controller::navigateTo,
         onMicPressed = controller::onMicPressed,
         onMicReleased = controller::onMicReleased,
@@ -72,6 +74,8 @@ private fun CockpitLayout(
     micState: MicState,
     destination: String?,
     destinationPoint: com.example.testapp.model.GeoPoint?,
+    suggestions: List<Pair<String, com.example.testapp.model.GeoPoint>>,
+    connectivity: Pair<Boolean, String>,
     onNavigateTo: (String) -> Unit,
     onMicPressed: () -> Unit,
     onMicReleased: () -> Unit,
@@ -88,6 +92,7 @@ private fun CockpitLayout(
         NavigationMap(
             destination = destination,
             destinationPoint = destinationPoint,
+            suggestions = suggestions,
             onNavigateTo = onNavigateTo,
             modifier = Modifier.weight(1f).fillMaxHeight(),
         )
@@ -102,6 +107,7 @@ private fun CockpitLayout(
 
         MicRail(
             micState = micState,
+            connectivity = connectivity,
             onPressed = onMicPressed,
             onReleased = onMicReleased,
             modifier = Modifier.width(128.dp).fillMaxHeight(),
@@ -141,6 +147,7 @@ private fun AiPanel(
 @Composable
 private fun MicRail(
     micState: MicState,
+    connectivity: Pair<Boolean, String>,
     onPressed: () -> Unit,
     onReleased: () -> Unit,
     modifier: Modifier = Modifier,
@@ -151,6 +158,18 @@ private fun MicRail(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    if (connectivity.first) "● AI Box 已連線" else "○ AI Box 未連線",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (connectivity.first) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+                Text(
+                    "雲端 AI：${connectivity.second}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             MicButton(micState, onPressed, onReleased)
             Text(
                 text = when (micState) {
