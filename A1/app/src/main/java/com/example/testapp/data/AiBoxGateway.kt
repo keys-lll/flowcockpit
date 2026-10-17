@@ -2,11 +2,13 @@ package com.example.testapp.data
 
 import com.example.testapp.model.UserAction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 /** A1 畫面與 AI Box 之間的介面;A2 以 WebSocket 實作取代 [FakeAiBox] */
 interface AiBoxGateway {
     /** 收到的 WebSocket 外層包裝 JSON 字串 */
     val messages: Flow<String>
+    val connectivity: StateFlow<Pair<Boolean, String>>
 
     fun startVoiceInput()
     fun stopVoiceInput()
