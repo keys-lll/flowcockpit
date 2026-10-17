@@ -7,6 +7,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -51,6 +53,8 @@ class HttpAiBox(
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     override val messages: Flow<String> = _messages.asSharedFlow()
+    private val _connectivity = MutableStateFlow(false to "檢查中")
+    override val connectivity: StateFlow<Pair<Boolean, String>> = _connectivity
 
     private var socket: WebSocket? = null
     @Volatile private var taskId = DEFAULT_TASK_ID
@@ -59,6 +63,28 @@ class HttpAiBox(
 
     init {
         connect()
+        scope.launch(Dispatchers.IO) {
+            while (true) {
+                val status = runCatching {
+                    httpClient.newCall(
+                        Request.Builder().url("http://$host/api/connectivity").get().build(),
+                    ).execute().use { response ->
+                        if (!response.isSuccessful) null
+                        else JSONObject(response.body?.string().orEmpty()).optString("cloud", "unavailable")
+                    }
+                }.getOrNull()
+                if (status == null) {
+                    _connectivity.value = false to "無法檢查"
+                } else {
+                    _connectivity.value = true to when (status) {
+                        "ready" -> "雲端服務就緒"
+                        "offline_only" -> "離線模式"
+                        else -> "雲端服務不可用"
+                    }
+                }
+                delay(5_000L)
+            }
+        }
     }
 
     private fun connect() {
@@ -76,6 +102,7 @@ class HttpAiBox(
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    _connectivity.value = false to "無法檢查"
                     reconnect()
                 }
 
