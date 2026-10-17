@@ -46,6 +46,7 @@ fun MapLibreView(
     hasRealLocation: Boolean,
     destination: GeoPoint?,
     route: PlannedRoute?,
+    suggestions: List<Pair<String, GeoPoint>> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -92,7 +93,7 @@ fun MapLibreView(
     AndroidView(
         factory = { mapView },
         modifier = modifier.fillMaxSize(),
-        update = { renderer.update(origin, hasRealLocation, destination, route) },
+        update = { renderer.update(origin, hasRealLocation, destination, route, suggestions) },
     )
 }
 
@@ -105,6 +106,7 @@ private class MapRenderer {
     private var hasRealLocation: Boolean = false
     private var currentDestination: GeoPoint? = null
     private var currentRoute: PlannedRoute? = null
+    private var currentSuggestions: List<Pair<String, GeoPoint>> = emptyList()
     private var lastCameraKey: String? = null
 
     fun attach(view: MapView, loadedMap: MapLibreMap, loadedStyle: Style) {
@@ -115,6 +117,7 @@ private class MapRenderer {
         loadedStyle.addSource(source("navigation-line"))
         loadedStyle.addSource(source("navigation-origin"))
         loadedStyle.addSource(source("navigation-destination"))
+        loadedStyle.addSource(source("navigation-suggestions"))
         loadedStyle.addLayer(
             LineLayer("navigation-route-shadow", "navigation-line")
                 .withProperties(lineColor(AndroidColor.rgb(16, 28, 47)), lineWidth(11f), lineCap(LINE_CAP_ROUND)),
@@ -133,6 +136,15 @@ private class MapRenderer {
                 ),
         )
         loadedStyle.addLayer(
+            CircleLayer("navigation-suggested-pins", "navigation-suggestions")
+                .withProperties(
+                    circleColor(AndroidColor.rgb(44, 205, 142)),
+                    circleRadius(8f),
+                    circleStrokeColor(AndroidColor.WHITE),
+                    circleStrokeWidth(2f),
+                ),
+        )
+        loadedStyle.addLayer(
             CircleLayer("navigation-pin", "navigation-destination")
                 .withProperties(
                     circleColor(AndroidColor.rgb(255, 175, 45)),
@@ -144,11 +156,12 @@ private class MapRenderer {
         redraw()
     }
 
-    fun update(origin: GeoPoint, hasRealLocation: Boolean, destination: GeoPoint?, route: PlannedRoute?) {
+    fun update(origin: GeoPoint, hasRealLocation: Boolean, destination: GeoPoint?, route: PlannedRoute?, suggestions: List<Pair<String, GeoPoint>>) {
         currentOrigin = origin
         this.hasRealLocation = hasRealLocation
         currentDestination = destination
         currentRoute = route
+        currentSuggestions = suggestions
         redraw()
     }
 
@@ -164,6 +177,15 @@ private class MapRenderer {
             if (target != null) source.setGeoJson(Point.fromLngLat(target.longitude, target.latitude))
             else source.setGeoJson(FeatureCollection.fromFeatures(emptyArray<Feature>()))
         }
+        (style.getSource("navigation-suggestions") as? GeoJsonSource)?.setGeoJson(
+            FeatureCollection.fromFeatures(
+                currentSuggestions.map { (name, point) ->
+                    Feature.fromGeometry(Point.fromLngLat(point.longitude, point.latitude)).apply {
+                        addStringProperty("name", name)
+                    }
+                },
+            ),
+        )
         val linePoints = currentRoute?.geometry.orEmpty()
         (style.getSource("navigation-line") as? GeoJsonSource)?.let { source ->
             if (linePoints.size >= 2) source.setGeoJson(
