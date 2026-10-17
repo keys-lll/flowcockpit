@@ -43,6 +43,7 @@ private const val TILE_STYLE = "https://tiles.openfreemap.org/styles/liberty"
 @Composable
 fun MapLibreView(
     origin: GeoPoint,
+    hasRealLocation: Boolean,
     destination: GeoPoint?,
     route: PlannedRoute?,
     modifier: Modifier = Modifier,
@@ -91,7 +92,7 @@ fun MapLibreView(
     AndroidView(
         factory = { mapView },
         modifier = modifier.fillMaxSize(),
-        update = { renderer.update(origin, destination, route) },
+        update = { renderer.update(origin, hasRealLocation, destination, route) },
     )
 }
 
@@ -101,6 +102,7 @@ private class MapRenderer {
     private var map: MapLibreMap? = null
     private var style: Style? = null
     private var currentOrigin: GeoPoint? = null
+    private var hasRealLocation: Boolean = false
     private var currentDestination: GeoPoint? = null
     private var currentRoute: PlannedRoute? = null
     private var lastCameraKey: String? = null
@@ -142,8 +144,9 @@ private class MapRenderer {
         redraw()
     }
 
-    fun update(origin: GeoPoint, destination: GeoPoint?, route: PlannedRoute?) {
+    fun update(origin: GeoPoint, hasRealLocation: Boolean, destination: GeoPoint?, route: PlannedRoute?) {
         currentOrigin = origin
+        this.hasRealLocation = hasRealLocation
         currentDestination = destination
         currentRoute = route
         redraw()
@@ -167,7 +170,9 @@ private class MapRenderer {
                 LineString.fromLngLats(linePoints.map { Point.fromLngLat(it.longitude, it.latitude) }),
             ) else source.setGeoJson(FeatureCollection.fromFeatures(emptyArray<Feature>()))
         }
-        val cameraKey = "${origin.latitude},${origin.longitude}:${target?.latitude},${target?.longitude}:${linePoints.size}"
+        // 不要跟著每次 GPS 更新重新縮放鏡頭。
+        // 首次取得 GPS、目的地或路線改變時，才重新調整視野。
+        val cameraKey = "${hasRealLocation}:${target?.latitude},${target?.longitude}:${currentRoute?.geometry?.hashCode()}"
         if (cameraKey == lastCameraKey) return
         lastCameraKey = cameraKey
         mapView?.post {
