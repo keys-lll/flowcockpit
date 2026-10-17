@@ -161,7 +161,7 @@ fun NavigationMap(
                 Text("前往 ${destination ?: "未選擇目的地"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(routingMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    if (usingDemoOrigin) "起點：示範定位（等待 GPS）" else "起點：裝置定位",
+                    if (usingDemoOrigin) "等待 GPS" else "起點：裝置定位",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
