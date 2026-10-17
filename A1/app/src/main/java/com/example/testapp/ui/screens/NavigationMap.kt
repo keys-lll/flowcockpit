@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,12 +41,14 @@ import com.example.testapp.navigation.PlannedRoute
 import com.example.testapp.navigation.RouteRepository
 import com.example.testapp.navigation.RouteResult
 import java.time.LocalTime
+import android.os.SystemClock
+import kotlinx.coroutines.delay
 import java.time.format.DateTimeFormatter
 import kotlin.math.ceil
 
 /**
  * 真實 OpenStreetMap 路網的地圖畫面（MapLibre + OSRM）。
- * 預設起點是示範模式，使用者可以按「使用 GPS」切到裝置定位。
+ * 自動使用 GPS / Network 定位，若無權限或暫時無定位便使用示範座標。
  * 沒有網路時，MapLibre 圖磚只會顯示裝置已快取部分，路線也只顯示先前已成功取得者。
  */
 @Composable
@@ -57,20 +60,43 @@ fun NavigationMap(
 ) {
     val context = LocalContext.current
     val repository = remember(context) { RouteRepository(context) }
-    var gpsRequested by remember { mutableStateOf(false) }
+    var permissionGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     var gpsFix by remember { mutableStateOf<GeoPoint?>(null) }
+    var lastFixElapsedMs by remember { mutableStateOf(0L) }
+    var locationTick by remember { mutableStateOf(0L) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
-        gpsRequested = permissions.values.any { it }
-        if (!gpsRequested) gpsFix = null
+        permissionGranted = permissions.values.any { it } || hasLocationPermission(context)
+        if (!permissionGranted) gpsFix = null
     }
-
-    // 示範定位不應冒充真實位置。若 GPS 尚未定位，仍顯示標示清楚的示範起點。
-    val origin = if (gpsRequested) gpsFix ?: DEMO_ORIGIN else DEMO_ORIGIN
-    val usingDemoOrigin = !gpsRequested || gpsFix == null
+    // App 啟動即取得定位授權；拒絕時不阻擋地圖與 AI 功能。
+    LaunchedEffect(Unit) {
+        if (!hasLocationPermission(context)) {
+            permissionLauncher.launch(arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            ))
+        } else {
+            permissionGranted = true
+        }
+    }
+    // 15 秒沒有有效新定位，回到示範座標；之後 GPS 恢復會自動切換。
+    LaunchedEffect(Unit) {
+        while (true) {
+            locationTick = SystemClock.elapsedRealtime()
+            delay(1000L)
+        }
+    }
+    val freshFix = permissionGranted && gpsFix != null &&
+        locationTick - lastFixElapsedMs in 0L..15_000L
+    val origin = if (freshFix) gpsFix!! else DEMO_ORIGIN
+    val usingDemoOrigin = !freshFix
     LaunchedEffect(origin) { NavigationLocation.current = origin }
-    DeviceLocationTracker(gpsRequested, onFix = { gpsFix = it })
+    DeviceLocationTracker(permissionGranted, onFix = { point ->
+        gpsFix = point
+        lastFixElapsedMs = SystemClock.elapsedRealtime()
+    })
 
     var route by remember { mutableStateOf<PlannedRoute?>(null) }
     var resolvedDestination by remember { mutableStateOf<GeoPoint?>(destinationPoint) }
@@ -119,7 +145,7 @@ fun NavigationMap(
                 Text("前往 ${destination ?: "未選擇目的地"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(routingMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    if (usingDemoOrigin) "起點：雲林示範座標（非 GPS）" else "起點：裝置 GPS 定位",
+                    if (usingDemoOrigin) "起點：示範定位（等待 GPS）" else "起點：裝置定位",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -135,19 +161,6 @@ fun NavigationMap(
                 modifier = Modifier.padding(8.dp),
                 horizontalAlignment = Alignment.End,
             ) {
-                TextButton(onClick = {
-                    if (gpsRequested) {
-                        gpsRequested = false
-                        gpsFix = null
-                    } else if (hasLocationPermission(context)) {
-                        gpsRequested = true
-                    } else {
-                        permissionLauncher.launch(arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                        ))
-                    }
-                }) { Text(if (gpsRequested) "示範定位" else "使用 GPS") }
                 TextButton(onClick = { showSearch = !showSearch }) {
                     Text(if (showSearch) "關閉搜尋" else "搜尋目的地")
                 }
