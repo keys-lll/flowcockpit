@@ -235,7 +235,9 @@ class UIGenerator:
                         "has_seating": p.get("has_seating", True),
                         "has_food": p.get("has_food", False),
                         "straight_line_distance_m": p.get("drive_distance_m", 1500),
-                        "drive_time_min": p.get("drive_time_min")
+                        "drive_time_min": p.get("drive_time_min"),
+                        "latitude": p.get("latitude"),
+                        "longitude": p.get("longitude")
                     },
                     "selected": (p_id == str(selected_id))
                 }
@@ -298,7 +300,9 @@ def convert_bc_places_to_candidates(bc_places: List[Dict[str, Any]]) -> List[Dic
             "has_food": food or convenience,
             "drive_distance_m": dist_m,
             "drive_time_min": drive_min,
-            "address": p.get("address", "")
+            "address": p.get("address", ""),
+            "latitude": p.get("latitude", p.get("lat")),
+            "longitude": p.get("longitude", p.get("lon")),
         })
     return candidates
 
