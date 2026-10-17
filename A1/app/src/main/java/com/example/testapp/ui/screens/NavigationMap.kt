@@ -81,7 +81,7 @@ fun NavigationMap(
             permissionGranted = true
         }
     }
-    // 15 秒沒有有效新定位，回到示範座標；之後 GPS 恢復會自動切換。
+    // 每秒更新 GPS 狀態；失去新定位不再重置已取得的位置。
     LaunchedEffect(Unit) {
         while (true) {
             locationTick = SystemClock.elapsedRealtime()
@@ -106,8 +106,9 @@ fun NavigationMap(
     }
     val freshFix = actualPermission && locationAvailable && gpsFix != null &&
         locationTick - lastFixElapsedMs in 0L..15_000L
-    val origin = if (freshFix) gpsFix!! else DEMO_ORIGIN
-    val usingDemoOrigin = !freshFix
+    // 只在「從未取得真實座標」時用示範起點；訊號遺失保留上次座標，避免跨縣市跳動。
+    val origin = gpsFix ?: DEMO_ORIGIN
+    val waitingForGps = !freshFix
     LaunchedEffect(origin) { NavigationLocation.current = origin }
     DeviceLocationTracker(actualPermission, gpsAvailable, networkAvailable, onFix = { point ->
         gpsFix = point
@@ -144,6 +145,7 @@ fun NavigationMap(
     Box(modifier) {
         MapLibreView(
             origin = origin,
+            hasRealLocation = gpsFix != null,
             destination = resolvedDestination,
             route = route,
             modifier = Modifier.fillMaxSize(),
@@ -161,7 +163,7 @@ fun NavigationMap(
                 Text("前往 ${destination ?: "未選擇目的地"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(routingMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    if (usingDemoOrigin) "等待 GPS" else "起點：裝置定位",
+                    if (waitingForGps) "等待 GPS" else "起點：裝置定位",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
