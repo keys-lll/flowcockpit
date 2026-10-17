@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -51,7 +53,12 @@ import com.example.testapp.model.UserAction
 import com.example.testapp.ui.components.GeneratedUiRenderer
 
 @Composable
-fun CockpitScreen(controller: CockpitController, modifier: Modifier = Modifier) {
+fun CockpitScreen(
+    controller: CockpitController,
+    modifier: Modifier = Modifier,
+    aiBoxHost: String = "10.0.2.2:8000",
+    onAiBoxHostChange: (String) -> Unit = {},
+) {
     CockpitLayout(
         ui = controller.ui,
         micState = controller.micState,
@@ -59,6 +66,8 @@ fun CockpitScreen(controller: CockpitController, modifier: Modifier = Modifier) 
         destinationPoint = controller.destinationPoint,
         suggestions = controller.suggestedPlaces,
         connectivity = controller.connectivity,
+        aiBoxHost = aiBoxHost,
+        onAiBoxHostChange = onAiBoxHostChange,
         onNavigateTo = controller::navigateTo,
         onMicPressed = controller::onMicPressed,
         onMicReleased = controller::onMicReleased,
@@ -76,6 +85,8 @@ private fun CockpitLayout(
     destinationPoint: com.example.testapp.model.GeoPoint?,
     suggestions: List<Pair<String, com.example.testapp.model.GeoPoint>>,
     connectivity: Pair<Boolean, String>,
+    aiBoxHost: String,
+    onAiBoxHostChange: (String) -> Unit,
     onNavigateTo: (String) -> Unit,
     onMicPressed: () -> Unit,
     onMicReleased: () -> Unit,
@@ -108,6 +119,8 @@ private fun CockpitLayout(
         MicRail(
             micState = micState,
             connectivity = connectivity,
+            aiBoxHost = aiBoxHost,
+            onAiBoxHostChange = onAiBoxHostChange,
             onPressed = onMicPressed,
             onReleased = onMicReleased,
             modifier = Modifier.width(128.dp).fillMaxHeight(),
@@ -148,10 +161,50 @@ private fun AiPanel(
 private fun MicRail(
     micState: MicState,
     connectivity: Pair<Boolean, String>,
+    aiBoxHost: String,
+    onAiBoxHostChange: (String) -> Unit,
     onPressed: () -> Unit,
     onReleased: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showHostDialog by remember { mutableStateOf(false) }
+    var hostInput by remember(aiBoxHost) { mutableStateOf(aiBoxHost) }
+    val parts = hostInput.trim().split(":")
+    val hostValid = parts.size == 2 &&
+        parts[0].matches(Regex("[A-Za-z0-9.-]+")) &&
+        (parts[1].toIntOrNull()?.let { it in 1..65535 } == true)
+
+    if (showHostDialog) {
+        AlertDialog(
+            onDismissRequest = { showHostDialog = false },
+            title = { Text("AI Box 連線設定") },
+            text = {
+                Column {
+                    Text("輸入筆電的區域網路 IP 和埠號，兩台裝置須連同一個 Wi-Fi。")
+                    OutlinedTextField(
+                        value = hostInput,
+                        onValueChange = { hostInput = it },
+                        label = { Text("例如 192.168.1.100:8000") },
+                        singleLine = true,
+                        isError = hostInput.isNotBlank() && !hostValid,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = hostValid,
+                    onClick = {
+                        showHostDialog = false
+                        onAiBoxHostChange(hostInput.trim())
+                    },
+                ) { Text("儲存並連線") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHostDialog = false }) { Text("取消") }
+            },
+        )
+    }
+
     Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -169,6 +222,9 @@ private fun MicRail(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            TextButton(onClick = { hostInput = aiBoxHost; showHostDialog = true }) {
+                Text("連線設定")
             }
             MicButton(micState, onPressed, onReleased)
             Text(
