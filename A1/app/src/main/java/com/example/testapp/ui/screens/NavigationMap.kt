@@ -3,6 +3,7 @@ package com.example.testapp.ui.screens
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -27,7 +28,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,12 +88,28 @@ fun NavigationMap(
             delay(1000L)
         }
     }
-    val freshFix = permissionGranted && gpsFix != null &&
+    // 每次心跳重新檢查系統定位服務與權限，避免 GPS 在設定中切換後狀態卡住。
+    val locationManager = remember(context) {
+        context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    }
+    val gpsAvailable = locationTick >= 0 && runCatching {
+        locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+    }.getOrDefault(false)
+    val networkAvailable = locationTick >= 0 && runCatching {
+        locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }.getOrDefault(false)
+    val locationAvailable = gpsAvailable || networkAvailable
+    val actualPermission = hasLocationPermission(context)
+    LaunchedEffect(actualPermission) {
+        permissionGranted = actualPermission
+        if (!actualPermission) gpsFix = null
+    }
+    val freshFix = actualPermission && locationAvailable && gpsFix != null &&
         locationTick - lastFixElapsedMs in 0L..15_000L
     val origin = if (freshFix) gpsFix!! else DEMO_ORIGIN
     val usingDemoOrigin = !freshFix
     LaunchedEffect(origin) { NavigationLocation.current = origin }
-    DeviceLocationTracker(permissionGranted, onFix = { point ->
+    DeviceLocationTracker(actualPermission, gpsAvailable, networkAvailable, onFix = { point ->
         gpsFix = point
         lastFixElapsedMs = SystemClock.elapsedRealtime()
     })
@@ -226,24 +242,40 @@ private fun hasLocationPermission(context: Context): Boolean =
     context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
     context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-/** 持續取得系統定位。需使用者主動按鍵同意；沒有定位時明確顯示示範起點。 */
+/** 監聽 GPS 與網路定位。定位服務啟閉時由 Compose 自動重新註冊。 */
 @Suppress("MissingPermission")
 @Composable
-private fun DeviceLocationTracker(enabled: Boolean, onFix: (GeoPoint) -> Unit) {
+private fun DeviceLocationTracker(
+    enabled: Boolean,
+    gpsAvailable: Boolean,
+    networkAvailable: Boolean,
+    onFix: (GeoPoint) -> Unit,
+) {
     val context = LocalContext.current
-    DisposableEffect(context, enabled) {
-        if (!enabled || !hasLocationPermission(context)) return@DisposableEffect onDispose { }
-        val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val listener = LocationListener { position ->
-            GeoPoint(position.latitude, position.longitude)
-                .takeIf { it.isValid() }
-                ?.let(onFix)
+    val latestOnFix by androidx.compose.runtime.rememberUpdatedState(onFix)
+    DisposableEffect(context, enabled, gpsAvailable, networkAvailable) {
+        if (!enabled || (!gpsAvailable && !networkAvailable) || !hasLocationPermission(context)) {
+            return@DisposableEffect onDispose { }
         }
-        for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
-            runCatching {
-                if (manager.isProviderEnabled(provider)) {
+        val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val listener = LocationListener { location: Location ->
+            // 忽略超過 15 秒的快取位置，不能把舊資料當作剛取得的 GPS。
+            val ageMillis = (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000L
+            if (ageMillis in 0L..15_000L) {
+                GeoPoint(location.latitude, location.longitude)
+                    .takeIf { it.isValid() }
+                    ?.let { latestOnFix(it) }
+            }
+        }
+        for ((provider, available) in listOf(
+            LocationManager.GPS_PROVIDER to gpsAvailable,
+            LocationManager.NETWORK_PROVIDER to networkAvailable,
+        )) {
+            if (available) {
+                runCatching {
                     manager.getLastKnownLocation(provider)?.let(listener::onLocationChanged)
-                    manager.requestLocationUpdates(provider, 5000L, 100f, listener)
+                    // 不要求移動距離，靜止時也能收到更新。
+                    manager.requestLocationUpdates(provider, 1000L, 0f, listener)
                 }
             }
         }
