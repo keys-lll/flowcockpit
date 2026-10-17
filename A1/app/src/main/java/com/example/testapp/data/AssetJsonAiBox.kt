@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -22,6 +24,7 @@ class AssetJsonAiBox(
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     override val messages: Flow<String> = _messages.asSharedFlow()
+    override val connectivity: StateFlow<Pair<Boolean, String>> = MutableStateFlow(false to "離線展示")
 
     private val files: List<String> =
         context.assets.list(dir).orEmpty().filter { it.endsWith(".json") }.sorted()
