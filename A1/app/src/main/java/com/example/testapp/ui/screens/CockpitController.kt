@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 enum class MicState { Idle, Listening, Processing }
 
-const val INITIAL_DESTINATION = "國立雲林科技大學"
+const val INITIAL_DESTINATION = ""
 
 /** 主畫面狀態;A2 可在此接上真正的 WebSocket gateway 與行駛模式 */
 class CockpitController(
@@ -27,10 +27,26 @@ class CockpitController(
         private set
     var micState by mutableStateOf(MicState.Idle)
         private set
-    var destination by mutableStateOf<String?>(INITIAL_DESTINATION)
+    var destination by mutableStateOf<String?>(null)
         private set
     var destinationPoint by mutableStateOf<GeoPoint?>(null)
         private set
+
+    var suggestedPlaces by mutableStateOf<List<Pair<String, GeoPoint>>>(emptyList())
+        private set
+
+    private fun candidateLocation(card: UiComponent.CandidateCard): GeoPoint? {
+        fun number(vararg keys: String): Double? = keys.firstNotNullOfOrNull { key ->
+            when (val v = card.attributes[key]) {
+                is Number -> v.toDouble()
+                is String -> v.toDoubleOrNull()
+                else -> null
+            }
+        }
+        val lat = number("latitude", "lat") ?: return null
+        val lon = number("longitude", "lon", "lng") ?: return null
+        return GeoPoint(lat, lon).takeIf { it.isValid() }
+    }
 
     private var taskId: String? = null
     private var version = -1
@@ -83,6 +99,7 @@ class CockpitController(
                     GeoPoint(latitude, longitude).takeIf { it.isValid() }
                 } else null
             }
+            suggestedPlaces = emptyList()
             ui = null
             awaitingResult = false
             taskId = null
@@ -100,6 +117,7 @@ class CockpitController(
 
     fun dismissPanel() {
         ui = null
+        suggestedPlaces = emptyList()
         awaitingResult = false
     }
 
@@ -112,6 +130,10 @@ class CockpitController(
         version = envelope.version
         if (!awaitingResult) return
         ui = UiJsonParser.parseUiDescription(envelope.payload)
+        suggestedPlaces = ui?.components.orEmpty()
+            .filterIsInstance<UiComponent.CandidateCard>()
+            .mapNotNull { card -> candidateLocation(card)?.let { (card.name ?: "推薦地點") to it } }
+            .distinctBy { it.second }
         processingTimeout?.cancel()
         if (micState == MicState.Processing) micState = MicState.Idle
     }
