@@ -55,8 +55,12 @@ class CockpitController(
     /** 錄音送出之後才顯示 AI 建議;啟動、收合、確認之後 D 推來的狀態只記錄版本,不顯示 */
     private var awaitingResult = false
 
+    var connectivity by mutableStateOf(false to "檢查中")
+        private set
+
     init {
         scope.launch { gateway.messages.collect(::onMessage) }
+        scope.launch { gateway.connectivity.collect { connectivity = it } }
     }
 
     fun onMicPressed() {
