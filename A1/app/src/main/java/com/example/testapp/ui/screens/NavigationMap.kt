@@ -151,7 +151,7 @@ fun NavigationMap(
             is RouteResult.Success -> {
                 route = result.route
                 resolvedDestination = result.route.destination
-                routingMessage = if (result.route.fromCache) "已載入快取路線" else "道路路線已規劃"
+                routingMessage = if (result.route.fromCache) "已載入快取路線（離線模式）" else "道路路線已規劃"
             }
             is RouteResult.Error -> {
                 routingMessage = result.message
