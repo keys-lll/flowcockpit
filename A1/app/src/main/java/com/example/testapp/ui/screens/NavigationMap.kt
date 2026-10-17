@@ -151,7 +151,7 @@ fun NavigationMap(
             is RouteResult.Success -> {
                 route = result.route
                 resolvedDestination = result.route.destination
-                routingMessage = if (result.route.fromCache) "離線快取路線 · 非即時路況" else "道路路線已規劃 · 非即時路況"
+                routingMessage = if (result.route.fromCache) "已載入快取路線" else "道路路線已規劃"
             }
             is RouteResult.Error -> {
                 routingMessage = result.message
@@ -185,7 +185,7 @@ fun NavigationMap(
                 Text("前往 ${destination ?: "未選擇目的地"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(routingMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    if (waitingForGps) "等待 GPS" else "起點：裝置定位",
+                    if (waitingForGps) "等待 GPS" else "GPS 已定位",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
