@@ -55,6 +55,7 @@ import kotlin.math.ceil
 fun NavigationMap(
     destination: String?,
     destinationPoint: GeoPoint? = null,
+    suggestions: List<Pair<String, GeoPoint>> = emptyList(),
     onNavigateTo: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -168,6 +169,7 @@ fun NavigationMap(
             hasRealLocation = gpsFix != null,
             destination = resolvedDestination,
             route = route,
+            suggestions = suggestions,
             modifier = Modifier.fillMaxSize(),
         )
 
