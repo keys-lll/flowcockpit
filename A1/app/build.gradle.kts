@@ -13,7 +13,7 @@ android {
         applicationId = "com.example.testapp"
         minSdk = 35
         targetSdk = 37
-        versionCode = providers.environmentVariable("APK_VERSION_CODE").orElse("2").get().toInt()
+        versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

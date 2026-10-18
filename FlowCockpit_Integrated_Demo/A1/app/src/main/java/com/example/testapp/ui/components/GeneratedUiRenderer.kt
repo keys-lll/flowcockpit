@@ -48,7 +48,7 @@ fun GeneratedUiRenderer(
         description.errorMessage?.let { item { SystemMessage(it) } }
         description.clarificationNeeded?.let { item { ClarificationPrompt(it) } }
         // AI 建議放在條件與候選之前，避免使用者要往下滑才看得到。
-        items(panels) { CompareConfirmPanelView(it, cardsById, onAction, cloudStatus = description.cloudStatus) }
+        items(panels) { CompareConfirmPanelView(it, cardsById, onAction, cloudStatus = description.cloudStatus, cloudInsight = description.cloudInsight) }
         items(conditions) { ConditionControlView(it, onAction) }
 
         if (cards.isNotEmpty()) {

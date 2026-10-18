@@ -30,6 +30,7 @@ object UiJsonParser {
             rawText = payload.optStringOrNull("raw_text"),
             errorMessage = payload.optStringOrNull("error_message"),
             cloudStatus = payload.optStringOrNull("cloud_status"),
+            cloudInsight = payload.optStringOrNull("cloud_insight") ?: payload.optStringOrNull("cloud_prompt"),
         )
     }
 
@@ -67,7 +68,11 @@ object UiJsonParser {
                         id = "card_$id",
                         candidateId = id,
                         name = item.optStringOrNull("name"),
-                        attributes = emptyMap(),
+                        attributes = item.optJSONObject("attributes").toMap().ifEmpty {
+                            listOf("indoor", "has_seating", "seating", "has_food", "drive_distance_m", "drive_time_min")
+                                .mapNotNull { key -> item.opt(key).takeUnless { it == JSONObject.NULL }?.let { key to it } }
+                                .toMap()
+                        },
                         selected = id == selectedId,
                         tags = listOfNotNull(
                             item.optStringOrNull("drive_distance_desc"),
@@ -83,7 +88,7 @@ object UiJsonParser {
                     UiComponent.CompareConfirmPanel(
                         id = type,
                         candidateIds = listOfNotNull(data.optStringOrNull("selected_id")),
-                        comparisonText = data.optStringOrNull("cloud_enhanced_text"),
+                        comparisonText = data.optStringOrNull("cloud_enhanced_text") ?: data.optStringOrNull("comparison_text"),
                         confirmEnabled = data.optString("status") != "CONFIRMED",
                     )
                 )
@@ -116,7 +121,7 @@ object UiJsonParser {
                 UiComponent.CompareConfirmPanel(
                     id = id,
                     candidateIds = (0 until ids.length()).mapNotNull { ids.optStringOrNull(it) },
-                    comparisonText = data.optStringOrNull("comparison_text"),
+                    comparisonText = data.optStringOrNull("comparison_text") ?: data.optStringOrNull("cloud_enhanced_text"),
                     confirmEnabled = data.optBoolean("confirm_enabled", false),
                 )
             }

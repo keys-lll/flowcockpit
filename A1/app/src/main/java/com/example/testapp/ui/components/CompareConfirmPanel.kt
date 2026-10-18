@@ -98,25 +98,7 @@ private fun CompareColumn(
                 AttributeChip(describeAttribute("屬性", null))
             } else {
                 card.attributes.forEach { (key, value) ->
-                    when (key.lowercase()) {
-                        "latitude", "longitude", "lat", "lon", "lng" -> Unit
-                        "straight_line_distance_m", "drive_distance_m", "distance_m" -> {
-                            val meters = (value as? Number)?.toDouble()
-                                ?: value?.toString()?.toDoubleOrNull()
-                            if (meters != null) {
-                                val label = when (key.lowercase()) {
-                                    "straight_line_distance_m" -> "直線距離"
-                                    "drive_distance_m" -> "道路距離"
-                                    else -> "距離"
-                                }
-                                val distance = if (meters >= 1000) {
-                                    String.format(java.util.Locale.TAIWAN, "%.1f 公里", meters / 1000)
-                                } else "${meters.toInt()} 公尺"
-                                AttributeChip(AttributeText("$label $distance", ChipTone.Neutral))
-                            }
-                        }
-                        else -> AttributeChip(describeAttribute(key, value))
-                    }
+                    AttributeChip(describeAttribute(key, value))
                 }
                 card.tags.forEach { AttributeChip(AttributeText(it, ChipTone.Neutral)) }
             }

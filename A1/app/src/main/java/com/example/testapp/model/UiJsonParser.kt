@@ -84,8 +84,7 @@ object UiJsonParser {
                     UiComponent.CompareConfirmPanel(
                         id = type,
                         candidateIds = listOfNotNull(data.optStringOrNull("selected_id")),
-                        comparisonText = data.optStringOrNull("cloud_enhanced_text")
-                            ?: data.optStringOrNull("comparison_text"),
+                        comparisonText = data.optStringOrNull("cloud_enhanced_text"),
                         confirmEnabled = data.optString("status") != "CONFIRMED",
                     )
                 )

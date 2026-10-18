@@ -16,15 +16,17 @@ except ImportError:  # 允許在未安裝雲端依賴時以離線模式啟動
 
 # .env 放在專案根目錄(e/ 的上一層),不管從哪個資料夾執行這支程式都能找到
 if load_dotenv is not None:
-    service_root = Path(__file__).resolve().parent.parent
-    load_dotenv(service_root / ".env", override=False)
-    load_dotenv(service_root.parent / ".env", override=False)
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 TIMEOUT_SECONDS = 15.0
 MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
 
 def get_comparison(candidates: list[dict], conditions: dict, raw_text: str | None = None) -> str | None:
+    return get_comparison_result(candidates, conditions, raw_text)[0]
+
+
+def get_comparison_result(candidates: list[dict], conditions: dict, raw_text: str | None = None) -> tuple[str | None, str]:
     """
     candidates: 候選清單,格式對齊 D→A1 規格裡 candidate_card 的 data,例如
         [{"candidate_id": "loc_001", "name": "示範地點A", "attributes": {"indoor": True, "walk_distance_m": 180}}, ...]
@@ -33,14 +35,14 @@ def get_comparison(candidates: list[dict], conditions: dict, raw_text: str | Non
     回傳:一段中文比較/取捨說明文字;若失敗、逾時或無網路,回傳 None。
     """
     if not candidates or not os.getenv("ANTHROPIC_API_KEY"):
-        return None
+        return None, "offline_only"
 
     try:
         from anthropic import Anthropic, APIConnectionError, APITimeoutError
         import httpx
         import truststore
     except ImportError:
-        return None
+        return None, "dependency_error"
 
     # Windows 校園／公司網路常由系統憑證庫信任代理 CA，但 certifi 不認得。
     # truststore 沿用 Windows 信任鏈；綁定 0.0.0.0 避免可解析但無法連線的 IPv6 路徑。
@@ -62,15 +64,17 @@ def get_comparison(candidates: list[dict], conditions: dict, raw_text: str | Non
                     max_tokens=300,
                     messages=[{"role": "user", "content": prompt}],
                 )
-                return message.content[0].text.strip()
+                return message.content[0].text.strip(), "enhanced"
             except (APIConnectionError, APITimeoutError):
                 if attempt == 0:
                     continue  # 重試一次
-                return None  # 兩次都失敗,維持本地結果,不中斷流程
-            except Exception:
+                return None, "network_error"  # 兩次都失敗,維持本地結果,不中斷流程
+            except Exception as exc:
                 # 驗證失敗、額度不足或其他錯誤同樣安全降級,不讓 demo 卡住。
-                return None
-    return None
+                status = getattr(exc, "status_code", None)
+                safe_status = status if isinstance(status, int) and 400 <= status < 600 else None
+                return None, f"auth_error_{safe_status}" if safe_status == 401 else (f"api_error_{safe_status}" if safe_status else "api_error")
+    return None, "api_error"
 
 
 def _candidate_attributes(candidate: dict[str, Any]) -> dict[str, Any]:

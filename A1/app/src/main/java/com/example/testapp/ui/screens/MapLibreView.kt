@@ -1,10 +1,6 @@
 package com.example.testapp.ui.screens
 
 import android.graphics.Color as AndroidColor
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Path
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -26,9 +22,6 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
-import org.maplibre.android.style.layers.SymbolLayer
-import org.maplibre.android.style.expressions.Expression.get
-import org.maplibre.android.style.layers.PropertyFactory.*
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory.circleColor
 import org.maplibre.android.style.layers.PropertyFactory.circleRadius
@@ -142,28 +135,13 @@ private class MapRenderer {
                     circleStrokeWidth(3f),
                 ),
         )
-        loadedStyle.addImage("suggestion-pin", suggestionPin())
         loadedStyle.addLayer(
-            SymbolLayer("navigation-suggested-pins", "navigation-suggestions")
+            CircleLayer("navigation-suggested-pins", "navigation-suggestions")
                 .withProperties(
-                    iconImage("suggestion-pin"),
-                    iconAnchor("bottom"),
-                    iconAllowOverlap(true),
-                    iconIgnorePlacement(true),
-                    iconSize(1.3f),
-                ),
-        )
-        loadedStyle.addLayer(
-            SymbolLayer("navigation-suggested-labels", "navigation-suggestions")
-                .withProperties(
-                    textField(get("name")),
-                    textSize(13f),
-                    textAnchor("top"),
-                    textOffset(arrayOf(0f, 0.4f)),
-                    textColor(AndroidColor.rgb(20, 65, 45)),
-                    textHaloColor(AndroidColor.WHITE),
-                    textHaloWidth(2f),
-                    textAllowOverlap(true),
+                    circleColor(AndroidColor.rgb(44, 205, 142)),
+                    circleRadius(8f),
+                    circleStrokeColor(AndroidColor.WHITE),
+                    circleStrokeWidth(2f),
                 ),
         )
         loadedStyle.addLayer(
@@ -176,28 +154,6 @@ private class MapRenderer {
                 ),
         )
         redraw()
-    }
-
-    private fun suggestionPin(): Bitmap {
-        val bitmap = Bitmap.createBitmap(40, 52, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val outline = Path().apply {
-            moveTo(20f, 50f)
-            cubicTo(15f, 40f, 3f, 29f, 3f, 20f)
-            cubicTo(3f, -2f, 37f, -2f, 37f, 20f)
-            cubicTo(37f, 29f, 25f, 40f, 20f, 50f)
-            close()
-        }
-        paint.color = AndroidColor.rgb(20, 155, 99)
-        canvas.drawPath(outline, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f
-        paint.color = AndroidColor.WHITE
-        canvas.drawPath(outline, paint)
-        paint.style = Paint.Style.FILL
-        canvas.drawCircle(20f, 19f, 6f, paint)
-        return bitmap
     }
 
     fun update(origin: GeoPoint, hasRealLocation: Boolean, destination: GeoPoint?, route: PlannedRoute?, suggestions: List<Pair<String, GeoPoint>>) {
@@ -238,23 +194,12 @@ private class MapRenderer {
         }
         // 不要跟著每次 GPS 更新重新縮放鏡頭。
         // 首次取得 GPS、目的地或路線改變時，才重新調整視野。
-        val cameraKey = "${hasRealLocation}:${target?.latitude},${target?.longitude}:${currentRoute?.geometry?.hashCode()}:${currentSuggestions.hashCode()}"
+        val cameraKey = "${hasRealLocation}:${target?.latitude},${target?.longitude}:${currentRoute?.geometry?.hashCode()}"
         if (cameraKey == lastCameraKey) return
         lastCameraKey = cameraKey
         mapView?.post {
             if (this.map !== map) return@post
-            val suggestedPoints = currentSuggestions.map { it.second }
-            if (suggestedPoints.isNotEmpty()) {
-                val points = suggestedPoints + listOfNotNull(target) + origin
-                if (points.distinct().size == 1) {
-                    val point = points.first()
-                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude, point.longitude), 14.0))
-                } else {
-                    val bounds = LatLngBounds.Builder()
-                    points.forEach { bounds.include(LatLng(it.latitude, it.longitude)) }
-                    map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds.build(), 76))
-                }
-            } else if (target == null) {
+            if (target == null) {
                 map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(origin.latitude, origin.longitude), 14.0))
             } else {
                 val builder = LatLngBounds.Builder()
