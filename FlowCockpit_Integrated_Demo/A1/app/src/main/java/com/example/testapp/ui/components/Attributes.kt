@@ -20,6 +20,7 @@ internal fun filterName(key: String): String = when (key) {
     "has_food" -> "有餐飲"
     "max_drive_distance_m" -> "行駛距離上限"
     "drive_distance_m" -> "行駛距離"
+    "drive_distance_desc" -> "行駛距離"
     "straight_line_distance_m" -> "直線距離"
     "drive_time_min" -> "車程"
     "max_drive_min" -> "車程上限"
@@ -40,6 +41,7 @@ internal fun describeAttribute(key: String, value: Any?): AttributeText {
         "drive_distance_m", "max_drive_distance_m" -> (value as? Number)
             ?.let { AttributeText("行駛 ${formatDistance(it.toInt())}", ChipTone.Neutral) }
             ?: AttributeText("行駛距離 $UNKNOWN", ChipTone.Unknown)
+        "drive_distance_desc", "drive_eta_desc" -> AttributeText(value.toString(), ChipTone.Neutral)
         "straight_line_distance_m" -> (value as? Number)
             ?.let { AttributeText("直線 ${formatDistance(it.toInt())}", ChipTone.Neutral) }
             ?: AttributeText("直線距離 $UNKNOWN", ChipTone.Unknown)

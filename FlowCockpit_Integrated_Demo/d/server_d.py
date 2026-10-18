@@ -341,7 +341,7 @@ async def connectivity():
             response = await client.get(f"{CLOUD_API_URL.rstrip('/')}/health")
             if response.is_success:
                 status = response.json().get("status")
-                cloud = "ready" if status == "ready" else "offline_only"
+                cloud = "configured" if status == "configured" else "offline_only"
     except (httpx.HTTPError, ValueError, KeyError):
         pass
     return {"aibox": "connected", "cloud": cloud}
@@ -365,8 +365,14 @@ async def apply_cloud_comparison(task_id: str, base_version: int) -> bool:
             response = await client.post(f"{CLOUD_API_URL}/api/compare", json=body)
         if response.status_code != 200:
             return False
-        comparison_text = response.json().get("comparison_text")
+        result = response.json()
+        comparison_text = result.get("comparison_text")
         if not comparison_text:
+            current = StateManager.get_or_create_task(task_id)
+            cloud_error = result.get("status", "")
+            if current["version"] == base_version and cloud_error.startswith(("auth_error", "api_error", "network_error", "dependency_error")):
+                updated = StateManager.update_task_state(task_id, cloud_status=cloud_error)
+                await manager.broadcast(UIGenerator.build_ui_json(updated))
             return False
     except Exception as exc:
         logger.info("Cloud enhancement unavailable: %s", exc)
@@ -393,6 +399,8 @@ async def enhance_with_retry(task_id: str, base_version: int) -> None:
             return
     current = StateManager.get_or_create_task(task_id)
     if current["version"] == base_version and current.get("cloud_status") == "processing":
+        if current.get("cloud_status", "").startswith("auth_error"):
+            return
         updated = StateManager.update_task_state(task_id, cloud_status="local_only")
         await manager.broadcast(UIGenerator.build_ui_json(updated))
 

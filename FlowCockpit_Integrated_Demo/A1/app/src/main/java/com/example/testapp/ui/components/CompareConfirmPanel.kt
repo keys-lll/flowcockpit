@@ -33,6 +33,7 @@ fun CompareConfirmPanelView(
     candidates: Map<String, UiComponent.CandidateCard>,
     onAction: (UserAction) -> Unit,
     cloudStatus: String? = null,
+    cloudInsight: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -64,7 +65,7 @@ fun CompareConfirmPanelView(
                 }
             }
 
-            ComparisonText(data.comparisonText, cloudStatus)
+            ComparisonText(data.comparisonText ?: cloudInsight, cloudStatus)
         }
     }
 }
@@ -115,6 +116,8 @@ private fun ComparisonText(text: String?, cloudStatus: String?) {
             when (cloudStatus) {
                 "processing" -> "AI 正在根據你的語句與候選地點產生建議…"
                 "local_only" -> "地點搜尋已完成，但雲端 AI 暫時沒有回覆；仍可直接選擇下方地點。"
+                "auth_error_401" -> "雲端 AI 金鑰驗證失敗（HTTP 401）。請在筆電本機更新 ANTHROPIC_API_KEY 並重啟服務；金鑰內容不會顯示在此。"
+                "api_error_429" -> "雲端 AI 額度或速率限制（HTTP 429），請稍後重試。"
                 else -> "目前顯示本機搜尋結果；有網路時會補上 AI 取捨建議。"
             },
             style = MaterialTheme.typography.bodySmall,
