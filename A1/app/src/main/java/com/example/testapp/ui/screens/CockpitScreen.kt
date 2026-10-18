@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import com.example.testapp.R
 import com.example.testapp.model.UiDescription
 import com.example.testapp.model.UserAction
+import com.example.testapp.navigation.NavigationLocation
 import com.example.testapp.ui.components.GeneratedUiRenderer
 
 @Composable
@@ -60,7 +62,9 @@ fun CockpitScreen(
     aiBoxHost: String = "10.0.2.2:8000",
     onAiBoxHostChange: (String) -> Unit = {},
 ) {
+    val currentLocation by NavigationLocation.state.collectAsState()
     CockpitLayout(
+        locationReady = currentLocation != null,
         ui = controller.ui,
         micState = controller.micState,
         destination = controller.destination,
@@ -80,6 +84,7 @@ fun CockpitScreen(
 
 @Composable
 private fun CockpitLayout(
+    locationReady: Boolean,
     ui: UiDescription?,
     micState: MicState,
     destination: String?,
@@ -118,6 +123,7 @@ private fun CockpitLayout(
         }
 
         MicRail(
+            locationReady = locationReady,
             micState = micState,
             connectivity = connectivity,
             aiBoxHost = aiBoxHost,
@@ -160,6 +166,7 @@ private fun AiPanel(
 
 @Composable
 private fun MicRail(
+    locationReady: Boolean,
     micState: MicState,
     connectivity: Pair<Boolean, String>,
     aiBoxHost: String,
@@ -228,10 +235,10 @@ private fun MicRail(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                MicButton(micState, onPressed, onReleased)
+                MicButton(micState, onPressed, onReleased, enabled = locationReady || micState == MicState.Listening)
                 Text(
                     text = when (micState) {
-                        MicState.Idle -> "按住說話"
+                        MicState.Idle -> if (locationReady) "按住說話" else "等待 GPS 定位"
                         MicState.Listening -> "聆聽中\n放開送出"
                         MicState.Processing -> "AI 處理中"
                     },
@@ -253,6 +260,7 @@ private fun MicButton(
     micState: MicState,
     onPressed: () -> Unit,
     onReleased: () -> Unit,
+    enabled: Boolean,
 ) {
     val currentOnPressed by rememberUpdatedState(onPressed)
     val currentOnReleased by rememberUpdatedState(onReleased)
@@ -270,8 +278,8 @@ private fun MicButton(
             .size(96.dp)
             .scale(if (listening) pulse else 1f)
             .background(if (listening) colors.error else colors.primary, CircleShape)
-            .pointerInput(Unit) {
-                detectTapGestures(
+            .pointerInput(enabled) {
+                if (enabled) detectTapGestures(
                     onPress = {
                         currentOnPressed()
                         tryAwaitRelease()

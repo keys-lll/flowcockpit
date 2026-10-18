@@ -172,7 +172,7 @@ class HttpAiBox(
         scope.launch {
             val wav = recorder.stop() ?: return@launch
             withContext(Dispatchers.IO) {
-                val origin = NavigationLocation.current
+                val origin = NavigationLocation.current ?: return@withContext
                 val requestTaskId = taskId
                 val body = MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", "voice.wav", wav.asRequestBody("audio/wav".toMediaType()))

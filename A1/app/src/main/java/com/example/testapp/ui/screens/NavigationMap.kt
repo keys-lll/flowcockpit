@@ -110,7 +110,7 @@ fun NavigationMap(
     // 只在「從未取得真實座標」時用示範起點；訊號遺失保留上次座標，避免跨縣市跳動。
     val origin = gpsFix ?: DEMO_ORIGIN
     val waitingForGps = !freshFix
-    LaunchedEffect(origin) { NavigationLocation.current = origin }
+    LaunchedEffect(origin, freshFix) { NavigationLocation.update(origin.takeIf { freshFix }) }
     DeviceLocationTracker(actualPermission, gpsAvailable, networkAvailable, onFix = { point ->
         gpsFix = point
         lastFixElapsedMs = SystemClock.elapsedRealtime()
