@@ -232,7 +232,7 @@ private fun MicRail(
                 Text(
                     text = when (micState) {
                         MicState.Idle -> "按住說話"
-                        MicState.Listening -> "聆聽中\\n放開送出"
+                        MicState.Listening -> "聆聽中\n放開送出"
                         MicState.Processing -> "AI 處理中"
                     },
                     style = MaterialTheme.typography.bodyMedium,
