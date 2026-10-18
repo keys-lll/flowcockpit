@@ -751,7 +751,7 @@ async def system_status():
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
                 response = await client.get(f"{CLOUD_API_URL}/health")
-            return response.status_code == 200 and response.json().get("status") == "ready"
+            return response.status_code == 200 and response.json().get("status") in ("ready", "configured")
         except Exception:
             return False
 
