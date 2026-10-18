@@ -332,6 +332,15 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+@app.get("/api/ui")
+async def current_ui(task_id: str = "demo_task_001"):
+    """Read-only UI snapshot so Android can recover a missed WebSocket update."""
+    task = StateManager.get_or_create_task(task_id)
+    return {
+        "cloud_status": task.get("cloud_status") or "idle",
+        "ui": UIGenerator.build_ui_json(task),
+    }
+
 @app.get("/api/connectivity")
 async def connectivity():
     """AI Box 可連線不等於雲端可用；以 E /health 回報實際服務狀態。"""
@@ -751,7 +760,7 @@ async def system_status():
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
                 response = await client.get(f"{CLOUD_API_URL}/health")
-            return response.status_code == 200 and response.json().get("status") in ("ready", "configured")
+            return response.status_code == 200 and response.json().get("status") == "ready"
         except Exception:
             return False
 
