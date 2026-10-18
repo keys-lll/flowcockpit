@@ -22,6 +22,63 @@ CLOUD_RETRY_SECONDS = tuple(
     if value.strip()
 )
 
+# Offline navigation is provided by a separately installed local OSRM service.
+# Bind OSRM to loopback only; Android calls this FastAPI gateway on port 8000.
+OSRM_LOCAL_URL = os.getenv("OSRM_LOCAL_URL", "http://127.0.0.1:5000").rstrip("/")
+OFFLINE_PLACES_DB = Path(os.getenv(
+    "FLOWCOCKPIT_PLACES_DB",
+    str(BASE_DIR.parent / "bc" / "data" / "taiwan.sqlite3"),
+))
+
+@app.get("/api/navigation/route")
+async def offline_navigation_route(
+    start_lat: float, start_lon: float, end_lat: float, end_lon: float
+):
+    from fastapi import HTTPException
+    if not (-90 <= start_lat <= 90 and -180 <= start_lon <= 180
+            and -90 <= end_lat <= 90 and -180 <= end_lon <= 180):
+        raise HTTPException(status_code=400, detail="Invalid coordinates")
+    coordinates = f"{start_lon},{start_lat};{end_lon},{end_lat}"
+    url = f"{OSRM_LOCAL_URL}/route/v1/driving/{coordinates}"
+    try:
+        async with httpx.AsyncClient(timeout=25.0, trust_env=False) as client:
+            response = await client.get(url, params={
+                "overview": "full", "geometries": "geojson", "steps": "false",
+            })
+            response.raise_for_status()
+            payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("Local OSRM unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="本地 OSRM 未啟動或道路圖資尚未建立")
+    if payload.get("code") != "Ok":
+        raise HTTPException(status_code=422, detail="無法在本地道路圖資中找到可通行路線")
+    return payload
+
+
+@app.get("/api/navigation/geocode")
+async def offline_navigation_geocode(q: str):
+    from fastapi import HTTPException
+    name = q.strip().casefold().replace("台", "臺")
+    if not name or len(name) > 120:
+        raise HTTPException(status_code=400, detail="請輸入有效地點名稱")
+    if not OFFLINE_PLACES_DB.is_file():
+        raise HTTPException(status_code=503, detail="離線地點資料庫尚未建立")
+    try:
+        with sqlite3.connect(f"file:{OFFLINE_PLACES_DB}?mode=ro", uri=True) as db:
+            db.row_factory = sqlite3.Row
+            # Restrict wildcard interpretation and keep bounded candidate scans.
+            pattern = "%" + name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            rows = db.execute(
+                "SELECT name,lat,lon FROM places WHERE named=1 "
+                "AND search_text LIKE ? ESCAPE '\\' LIMIT 8", (pattern,),
+            ).fetchall()
+    except sqlite3.Error as exc:
+        logger.warning("Offline geocode failed: %s", exc)
+        raise HTTPException(status_code=503, detail="離線地點資料庫無法讀取")
+    return {"results": [{"name": row["name"], "lat": row["lat"], "lon": row["lon"]}
+                        for row in rows]}
+
+
 logger = logging.getLogger("flowcockpit.d")
 UNSET = object()
 
