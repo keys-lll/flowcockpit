@@ -41,7 +41,7 @@ hostname -I
 
 D 服務監聽筆電的 8000 埠；BC/E 只監聽本機 8001/8002。筆電與 Android 必須連同一個可互通的 Wi-Fi。Android 實機使用筆電的區域網路 IP（如 `192.168.1.100:8000`），不是模擬器位址 `10.0.2.2:8000`。新版 Android App 在右側麥克風欄位提供「連線設定」，可輸入筆電 IP:8000，按「儲存並連線」後會保存設定並重連，不需要每次 IP 變動就重新編譯。**必須先安裝包含此修改的新 APK**；舊 APK 仍可能使用固定的 10.0.2.2。
 
-雲端 E 為選用功能。若要使用 Claude，在 `FlowCockpit_Integrated_Demo/.env` 放入 `ANTHROPIC_API_KEY=...`，不要提交金鑰；沒有 Key 也可啟動 E 並以離線模式運作。
+雲端 E 為選用功能。若要使用 Claude，可在 repo 根目錄 `.env` 或 `FlowCockpit_Integrated_Demo/.env` 設定 `ANTHROPIC_API_KEY=...`；既有 shell 環境變數優先，否則整合版目錄的 `.env` 優先於 repo 根目錄。不要提交金鑰；沒有 Key 也可啟動 E 並以離線模式運作。啟動後可查看 `http://筆電IP:8000/api/system/status` 確認 E 是否為 `ready`（狀態不會回傳金鑰）。
 
 預設 Whisper 是 `small`，可在 `.env` 設 `WHISPER_MODEL=base` 或 `tiny` 以減輕負載，但中文辨識率可能下降。
 
