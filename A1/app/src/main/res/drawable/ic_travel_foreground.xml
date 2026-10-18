@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- A cyan navigation route and location pin, centered in adaptive icon safe area. -->
+    <path android:strokeColor="#4BD8FF" android:strokeWidth="5"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M27,78L42,78L48,66L62,66L67,57"/>
+    <path android:fillColor="#3BC8F3"
+        android:pathData="M69,23C57.95,23 49,31.95 49,43C49,57 69,79 69,79C69,79 89,57 89,43C89,31.95 80.05,23 69,23z"/>
+    <path android:fillColor="#102033"
+        android:pathData="M69,34a9,9 0,1 0,0 18a9,9 0,1 0,0 -18z"/>
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M28,26L30,32L36,34L30,36L28,42L26,36L20,34L26,32z"/>
+</vector>
