@@ -19,7 +19,6 @@ data class PlannedRoute(
     val distanceMeters: Double,
     val durationSeconds: Double,
     val fromCache: Boolean = false,
-    val fromOfflineEngine: Boolean = false,
 )
 
 sealed interface RouteResult {
@@ -30,13 +29,11 @@ sealed interface RouteResult {
 /**
  * Demo 接線：
  * - 地點搜尋：Nominatim；查詢節流、傳 User-Agent、快取。
- * - 優先由 AI Box 上的本地 OSRM 規劃；失敗時嘗試線上 OSRM 與既有快取。
+ * - 道路規劃：OSRM 公共示範服務；離線時僅能使用已規劃路線快取。
  * 公開服務有配額與可用性限制；正式部署請替換為自架伺服器。
  */
 class RouteRepository(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("flowcockpit_navigation", Context.MODE_PRIVATE)
-    private val aiBoxPrefs = context.applicationContext.getSharedPreferences("ai_box_connection", Context.MODE_PRIVATE)
-    private val aiBoxBase: String get() = "http://" + (aiBoxPrefs.getString("host", "10.0.2.2:8000") ?: "10.0.2.2:8000").trim()
     private val client = OkHttpClient.Builder()
         .connectTimeout(9, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -44,14 +41,9 @@ class RouteRepository(context: Context) {
 
     suspend fun plan(origin: GeoPoint, name: String, preferred: GeoPoint?): RouteResult =
         withContext(Dispatchers.IO) {
-            val target = preferred?.takeIf { it.isValid() } ?: offlineGeocode(name) ?: geocode(name)
+            val target = preferred?.takeIf { it.isValid() } ?: geocode(name)
                 ?: return@withContext RouteResult.Error("無法確認地點，請輸入完整地名或由 AI 提供座標")
             val key = "route_${(origin.latitude * 1000).roundToInt()}_${(origin.longitude * 1000).roundToInt()}_${(target.latitude * 10000).roundToInt()}_${(target.longitude * 10000).roundToInt()}"
-            val offline = runCatching { fetchOfflineRoute(origin, target) }.getOrNull()
-            if (offline != null) {
-                prefs.edit().putString(key, serialize(offline)).apply()
-                return@withContext RouteResult.Success(offline)
-            }
             val live = runCatching { fetchRoute(origin, target) }.getOrNull()
             if (live != null) {
                 prefs.edit().putString(key, serialize(live)).apply()
@@ -59,22 +51,8 @@ class RouteRepository(context: Context) {
             }
             val cached = prefs.getString(key, null)?.let { runCatching { parseSaved(it, target) }.getOrNull() }
             if (cached != null) RouteResult.Success(cached.copy(fromCache = true))
-            else RouteResult.Error("無法取得路線：請確認筆電本地 OSRM 已啟動且平板與筆電在同一區網", target)
+            else RouteResult.Error("無法取得道路路線；請檢查網路，離線模式只支援已快取路線", target)
         }
-
-    private fun offlineGeocode(name: String): GeoPoint? {
-        if (name.isBlank()) return null
-        val query = URLEncoder.encode(name.trim(), "UTF-8")
-        val obj = JSONObject(get("$aiBoxBase/api/navigation/geocode?q=$query"))
-        val item = obj.optJSONArray("results")?.optJSONObject(0) ?: return null
-        return GeoPoint(item.getDouble("lat"), item.getDouble("lon")).takeIf { it.isValid() }
-    }
-
-    private fun fetchOfflineRoute(origin: GeoPoint, target: GeoPoint): PlannedRoute? {
-        val url = "$aiBoxBase/api/navigation/route?start_lat=${origin.latitude}&start_lon=${origin.longitude}" +
-            "&end_lat=${target.latitude}&end_lon=${target.longitude}"
-        return parseOsrmRoute(get(url), target)?.copy(fromOfflineEngine = true)
-    }
 
     private fun geocode(name: String): GeoPoint? {
         if (name.isBlank()) return null
@@ -111,11 +89,7 @@ class RouteRepository(context: Context) {
         val base = "https://router.project-osrm.org/route/v1/driving/"
         val url = "$base${origin.longitude},${origin.latitude};${target.longitude},${target.latitude}" +
             "?overview=full&geometries=geojson&steps=false"
-        return parseOsrmRoute(get(url), target)
-    }
-
-    private fun parseOsrmRoute(body: String, target: GeoPoint): PlannedRoute? {
-        val obj = JSONObject(body)
+        val obj = JSONObject(get(url))
         if (obj.optString("code") != "Ok") return null
         val route = obj.optJSONArray("routes")?.optJSONObject(0) ?: return null
         val coords = route.optJSONObject("geometry")?.optJSONArray("coordinates") ?: return null
