@@ -46,6 +46,20 @@ class SystemIntegrationTest(unittest.TestCase):
         card = next(c for c in message["payload"]["components"] if c["type"] == "candidate_card")
         self.assertEqual(card["data"]["attributes"]["straight_line_distance_m"], 900)
 
+    def test_ui_snapshot_returns_cloud_comparison_for_android_recovery(self):
+        server_d.StateManager.update_task_state(
+            "demo_task_001",
+            new_candidates=[{"id": "node/1", "name": "測試咖啡店"}],
+            comparison_text="雲端取捨完成",
+            cloud_status="enhanced",
+        )
+        response = TestClient(server_d.app).get("/api/ui", params={"task_id": "demo_task_001"})
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["cloud_status"], "enhanced")
+        panel = next(c for c in body["ui"]["payload"]["components"] if c["type"] == "compare_confirm_panel")
+        self.assertEqual(panel["data"]["comparison_text"], "雲端取捨完成")
+
     def test_nullable_state_can_be_cleared(self):
         server_d.StateManager.update_task_state(
             "demo_task_001", selected_id="node/1", comparison_text="舊比較", error_message="舊錯誤"
