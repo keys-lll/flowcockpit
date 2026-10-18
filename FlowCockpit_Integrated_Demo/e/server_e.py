@@ -32,6 +32,8 @@ def health():
 @app.post("/api/compare")
 def compare(request: CompareRequest):
     text, status = get_comparison_result(request.candidates, request.conditions, request.raw_text)
+    if status == "offline_only":
+        status = "local_only"
     return {
         "task_id": request.task_id,
         "base_version": request.base_version,
