@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import math
 import os
 import sqlite3
@@ -13,6 +14,10 @@ import uvicorn
 DB_PATH = "flowcockpit.db"
 BC_API_URL = os.getenv("BC_API_URL", "http://127.0.0.1:8001")
 CLOUD_API_URL = os.getenv("CLOUD_API_URL", "http://127.0.0.1:8002")
+CLOUD_RETRY_SECONDS = tuple(
+    float(value) for value in os.getenv("CLOUD_RETRY_SECONDS", "0,5,15").split(",") if value.strip()
+)
+logger = logging.getLogger("flowcockpit.d")
 
 # ==========================================
 # 1. 資料庫初始化
@@ -33,9 +38,13 @@ def init_db():
         status TEXT NOT NULL,
         clarification_needed TEXT,
         error_message TEXT,
-        updated_at REAL NOT NULL
+        updated_at REAL NOT NULL,
+        cloud_status TEXT
     )
     """)
+    columns = {row[1] for row in cursor.execute("PRAGMA table_info(task_states)")}
+    if "cloud_status" not in columns:
+        cursor.execute("ALTER TABLE task_states ADD COLUMN cloud_status TEXT")
     conn.commit()
     conn.close()
 
@@ -69,12 +78,12 @@ class StateManager:
         if not row:
             initial_filters = dict(DEFAULT_FILTERS)
             cursor.execute("""
-                INSERT INTO task_states VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO task_states VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 task_id, 1, "search_rest_stop", "預設休息推薦",
                 json.dumps(initial_filters),
                 json.dumps([]),
-                None, "", "IN_PROGRESS", None, "", time.time()
+                None, "", "IN_PROGRESS", None, "", time.time(), "idle"
             ))
             conn.commit()
             cursor.execute("SELECT * FROM task_states WHERE task_id = ?", (task_id,))
@@ -101,7 +110,7 @@ class StateManager:
             SET version = ?, intent = 'search_rest_stop', raw_text = '新任務開始',
                 filters_json = ?, candidates_json = ?, selected_id = NULL,
                 comparison_text = '', status = 'IN_PROGRESS', clarification_needed = NULL,
-                error_message = '', updated_at = ?
+                error_message = '', updated_at = ?, cloud_status = 'idle'
             WHERE task_id = ?
         """, (
             next_ver, json.dumps(initial_filters),
@@ -123,7 +132,8 @@ class StateManager:
         comparison_text: Optional[str] = None,
         clarification_needed: Optional[str] = None,
         status: Optional[str] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
+        cloud_status: Optional[str] = None,
     ) -> Dict[str, Any]:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -149,19 +159,20 @@ class StateManager:
         current_clarify = clarification_needed if clarification_needed is not None else row["clarification_needed"]
         current_status = status if status is not None else row["status"]
         current_err = error_message if error_message is not None else row["error_message"]
+        current_cloud_status = cloud_status if cloud_status is not None else row["cloud_status"]
 
         cursor.execute("""
             UPDATE task_states
             SET version = ?, intent = ?, raw_text = ?, filters_json = ?, 
                 candidates_json = ?, selected_id = ?, comparison_text = ?, 
-                clarification_needed = ?, status = ?, error_message = ?, updated_at = ?
+                clarification_needed = ?, status = ?, error_message = ?, updated_at = ?, cloud_status = ?
             WHERE task_id = ?
         """, (
             current_ver, current_intent, current_raw_text,
             json.dumps(current_filters, ensure_ascii=False),
             json.dumps(current_candidates, ensure_ascii=False),
             current_selected, current_comp_text, current_clarify, current_status, current_err,
-            time.time(), task_id
+            time.time(), current_cloud_status, task_id
         ))
         conn.commit()
         conn.close()
@@ -229,7 +240,8 @@ class UIGenerator:
 
         payload = {
             "components": components,
-            "clarification_needed": task.get("clarification_needed") or None
+            "clarification_needed": task.get("clarification_needed") or None,
+            "cloud_status": task.get("cloud_status") or "idle",
         }
 
         return {
@@ -271,6 +283,72 @@ def convert_bc_places_to_candidates(bc_places: List[Dict[str, Any]]) -> List[Dic
 # 4. WebSocket 管理 (對齊 A1 UserAction.kt)
 # ==========================================
 app = FastAPI(title="FlowCockpit Backend Module D")
+
+@app.get("/api/connectivity")
+async def connectivity():
+    """Report D connectivity separately from whether the cloud provider is configured."""
+    cloud = "unavailable"
+    try:
+        async with httpx.AsyncClient(timeout=2.5) as client:
+            response = await client.get(f"{CLOUD_API_URL.rstrip('/')}/health")
+        if response.is_success:
+            cloud = response.json().get("status", "offline_only")
+    except (httpx.HTTPError, ValueError):
+        pass
+    return {"aibox": "connected", "cloud": cloud}
+
+
+async def apply_cloud_comparison(task_id: str, base_version: int) -> bool:
+    """Ask E to compare the current candidates and publish its answer over the existing socket."""
+    task = StateManager.get_or_create_task(task_id)
+    if task["version"] != base_version or not task["candidates"] or task["status"] == "CONFIRMED":
+        return False
+    request_body = {
+        "task_id": task_id,
+        "base_version": base_version,
+        "candidates": task["candidates"],
+        "conditions": task["filters"],
+        "raw_text": task.get("raw_text"),
+    }
+    for attempt, delay_seconds in enumerate(CLOUD_RETRY_SECONDS or (0,)):
+        if delay_seconds:
+            await asyncio.sleep(delay_seconds)
+        current = StateManager.get_or_create_task(task_id)
+        if current["version"] != base_version or current["status"] == "CONFIRMED":
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=18.0) as client:
+                response = await client.post(f"{CLOUD_API_URL.rstrip('/')}/api/compare", json=request_body)
+            if not response.is_success:
+                logger.info("Cloud comparison returned HTTP %s", response.status_code)
+                continue
+            result = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.info("Cloud comparison unavailable: %s", exc)
+            continue
+
+        current = StateManager.get_or_create_task(task_id)
+        text = result.get("comparison_text")
+        if text and current["version"] == base_version and current["status"] != "CONFIRMED":
+            updated = StateManager.update_task_state(
+                task_id, comparison_text=text, cloud_status="enhanced"
+            )
+            await manager.broadcast(UIGenerator.build_ui_json(updated))
+            return True
+        if result.get("status") == "offline_only":
+            break
+
+    current = StateManager.get_or_create_task(task_id)
+    if current["version"] == base_version and current["status"] != "CONFIRMED":
+        updated = StateManager.update_task_state(task_id, cloud_status="local_only")
+        await manager.broadcast(UIGenerator.build_ui_json(updated))
+    return False
+
+
+def schedule_cloud_comparison(task: Dict[str, Any]) -> None:
+    if task.get("candidates") and task.get("status") != "CONFIRMED":
+        task = StateManager.update_task_state(task["task_id"], cloud_status="processing")
+        asyncio.create_task(apply_cloud_comparison(task["task_id"], task["version"]))
 
 class ConnectionManager:
     def __init__(self):
@@ -541,10 +619,13 @@ async def handle_audio_pipeline(
         new_filters=bc_intent_data.get("conditions"),
         new_candidates=candidates,
         selected_id=selected_target,
-        error_message=err_msg
+        comparison_text="",
+        error_message=err_msg,
+        cloud_status="processing" if candidates else "not_applicable",
     )
 
     await manager.broadcast(UIGenerator.build_ui_json(task))
+    schedule_cloud_comparison(task)
     return {"status": "ok", "version": task["version"], "candidates_count": len(candidates)}
 
 @app.get("/", response_class=HTMLResponse)
