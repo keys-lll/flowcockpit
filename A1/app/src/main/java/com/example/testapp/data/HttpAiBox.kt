@@ -130,6 +130,42 @@ class HttpAiBox(
         _messages.tryEmit(text)
     }
 
+    private fun emitUiFromHttpResponse(json: String): String? = runCatching {
+        val response = JSONObject(json)
+        val ui = response.optJSONObject("ui")
+            ?: response.takeIf { it.optString("type") == "ui_update" }
+            ?: return null
+        ui.toString().also { _messages.tryEmit(it) }
+    }.getOrNull()
+
+    /** Recover the final cloud-enhanced payload if the WebSocket update was missed. */
+    private suspend fun pollForCloudUi(requestTaskId: String) {
+        val deadline = System.currentTimeMillis() + CLOUD_RESULT_TIMEOUT_MS
+        val encodedTaskId = java.net.URLEncoder.encode(requestTaskId, Charsets.UTF_8.name())
+        while (System.currentTimeMillis() < deadline) {
+            val snapshot = runCatching {
+                httpClient.newCall(
+                    Request.Builder()
+                        .url("http://$host/api/ui?task_id=$encodedTaskId")
+                        .get()
+                        .build(),
+                ).execute().use { response ->
+                    if (!response.isSuccessful) null else response.body?.string()
+                }
+            }.getOrNull() ?: return // Older D servers may not expose the snapshot endpoint.
+
+            val response = runCatching { JSONObject(snapshot) }.getOrNull() ?: return
+            val ui = response.optJSONObject("ui") ?: return
+            emitUiFromHttpResponse(snapshot)
+            val status = response.optString(
+                "cloud_status",
+                ui.optJSONObject("payload")?.optString("cloud_status").orEmpty(),
+            )
+            if (status.isNotBlank() && status != "processing") return
+            delay(CLOUD_RESULT_POLL_INTERVAL_MS)
+        }
+    }
+
     override fun startVoiceInput() {
         recorder.start(scope)
     }
@@ -139,9 +175,10 @@ class HttpAiBox(
             val wav = recorder.stop() ?: return@launch
             withContext(Dispatchers.IO) {
                 val origin = NavigationLocation.current
+                val requestTaskId = taskId
                 val body = MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", "voice.wav", wav.asRequestBody("audio/wav".toMediaType()))
-                    .addFormDataPart("task_id", taskId)
+                    .addFormDataPart("task_id", requestTaskId)
                     .addFormDataPart("latitude", origin.latitude.toString())
                     .addFormDataPart("longitude", origin.longitude.toString())
                     .build()
@@ -149,10 +186,16 @@ class HttpAiBox(
                 val sent = runCatching {
                     httpClient.newCall(
                         Request.Builder().url("http://$host/api/audio").post(body).build(),
-                    ).execute().close()
+                    ).execute().use { response ->
+                        if (response.isSuccessful) {
+                            response.body?.string()?.let(::emitUiFromHttpResponse)
+                            true
+                        } else false
+                    }
                 }
                 // 連不上 D 且從未收過即時資料:錄音送出後改顯示離線備援(d_output.json)
                 if (sent.isFailure && !gotLive) emitFallback()
+                if (sent.getOrDefault(false)) pollForCloudUi(requestTaskId)
             }
         }
     }
@@ -168,5 +211,7 @@ class HttpAiBox(
 
     private companion object {
         const val DEFAULT_TASK_ID = "demo_task_001"
+        const val CLOUD_RESULT_TIMEOUT_MS = 60_000L
+        const val CLOUD_RESULT_POLL_INTERVAL_MS = 1_500L
     }
 }
