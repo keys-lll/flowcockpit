@@ -16,7 +16,9 @@ except ImportError:  # 允許在未安裝雲端依賴時以離線模式啟動
 
 # .env 放在專案根目錄(e/ 的上一層),不管從哪個資料夾執行這支程式都能找到
 if load_dotenv is not None:
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    service_root = Path(__file__).resolve().parent.parent
+    load_dotenv(service_root / ".env", override=False)
+    load_dotenv(service_root.parent / ".env", override=False)
 
 TIMEOUT_SECONDS = 15.0
 MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
