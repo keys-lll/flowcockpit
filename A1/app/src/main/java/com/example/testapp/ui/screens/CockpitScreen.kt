@@ -41,7 +41,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.pointer.pointerInput
@@ -223,11 +222,6 @@ private fun MicRail(
                     if (connectivity.first) "● AI Box 已連線" else "○ AI Box 未連線",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (connectivity.first) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                )
-                Text(
-                    connectivity.second,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF64B5F6),
                 )
             }
             Column(
