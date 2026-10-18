@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from cloud_enhance import MODEL_NAME, get_comparison
+from cloud_enhance import MODEL_NAME, get_comparison_result
 
 
 class CompareRequest(BaseModel):
@@ -22,19 +22,19 @@ app = FastAPI(title="FlowCockpit Cloud Enhancement Module E")
 @app.get("/health")
 def health():
     import os
-
+    key_present = bool(os.getenv("ANTHROPIC_API_KEY"))
     return {
-        "status": "ready" if os.getenv("ANTHROPIC_API_KEY") else "offline_only",
+        "status": "configured" if key_present else "offline_only",
         "model": MODEL_NAME,
     }
 
 
 @app.post("/api/compare")
 def compare(request: CompareRequest):
-    text = get_comparison(request.candidates, request.conditions, request.raw_text)
+    text, status = get_comparison_result(request.candidates, request.conditions, request.raw_text)
     return {
         "task_id": request.task_id,
         "base_version": request.base_version,
         "comparison_text": text,
-        "status": "enhanced" if text else "local_only",
+        "status": status,
     }

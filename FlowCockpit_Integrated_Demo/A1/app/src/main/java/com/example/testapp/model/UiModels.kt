@@ -17,6 +17,7 @@ data class UiDescription(
     val rawText: String? = null,
     val errorMessage: String? = null,
     val cloudStatus: String? = null,
+    val cloudInsight: String? = null,
 )
 
 sealed interface UiComponent {
