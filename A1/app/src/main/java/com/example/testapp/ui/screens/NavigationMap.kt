@@ -117,18 +117,20 @@ fun NavigationMap(
     })
 
     // 地圖標記依最新定位更新；路線只有首度 GPS 定位或明顯移動後才重新規劃。
-    var routingOrigin by remember { mutableStateOf(DEMO_ORIGIN) }
+    var routingOrigin by remember { mutableStateOf<GeoPoint?>(null) }
     var routingFromGps by remember { mutableStateOf(false) }
     var lastRerouteMs by remember { mutableStateOf(0L) }
-    LaunchedEffect(origin, gpsFix != null) {
-        val hasGps = gpsFix != null
+    LaunchedEffect(origin, freshFix) {
+        val hasGps = freshFix
         val distance = FloatArray(1)
-        Location.distanceBetween(
-            routingOrigin.latitude, routingOrigin.longitude,
-            origin.latitude, origin.longitude, distance,
-        )
+        routingOrigin?.let { previous ->
+            Location.distanceBetween(
+                previous.latitude, previous.longitude,
+                origin.latitude, origin.longitude, distance,
+            )
+        }
         val now = SystemClock.elapsedRealtime()
-        if ((hasGps && !routingFromGps) ||
+        if ((hasGps && routingOrigin == null) ||
             (hasGps && distance[0] >= 150f && now - lastRerouteMs >= 30_000L)) {
             routingOrigin = origin
             routingFromGps = true
@@ -146,8 +148,13 @@ fun NavigationMap(
             routingMessage = "請由 AI 或手動輸入目的地"
             return@LaunchedEffect
         }
-        routingMessage = "正在查詢真實道路路線…"
-        when (val result = repository.plan(routingOrigin, destination, destinationPoint)) {
+        val start = routingOrigin
+        if (start == null) {
+            routingMessage = "等待 GPS 定位，取得位置後自動規劃路線"
+            return@LaunchedEffect
+        }
+        routingMessage = "正在從目前位置規劃道路路線…"
+        when (val result = repository.plan(start, destination, destinationPoint)) {
             is RouteResult.Success -> {
                 route = result.route
                 resolvedDestination = result.route.destination
@@ -166,7 +173,7 @@ fun NavigationMap(
     Box(modifier) {
         MapLibreView(
             origin = origin,
-            hasRealLocation = gpsFix != null,
+            hasRealLocation = freshFix,
             destination = resolvedDestination,
             route = route,
             suggestions = suggestions,
