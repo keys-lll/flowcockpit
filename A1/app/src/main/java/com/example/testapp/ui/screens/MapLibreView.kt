@@ -150,6 +150,7 @@ private class MapRenderer {
                     iconAnchor("bottom"),
                     iconAllowOverlap(true),
                     iconIgnorePlacement(true),
+                    iconSize(1.3f),
                 ),
         )
         loadedStyle.addLayer(
@@ -162,6 +163,7 @@ private class MapRenderer {
                     textColor(AndroidColor.rgb(20, 65, 45)),
                     textHaloColor(AndroidColor.WHITE),
                     textHaloWidth(2f),
+                    textAllowOverlap(true),
                 ),
         )
         loadedStyle.addLayer(
