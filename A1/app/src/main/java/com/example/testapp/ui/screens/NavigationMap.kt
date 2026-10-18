@@ -158,11 +158,7 @@ fun NavigationMap(
             is RouteResult.Success -> {
                 route = result.route
                 resolvedDestination = result.route.destination
-                routingMessage = when {
-                    result.route.fromCache -> "已載入快取道路路線"
-                    result.route.fromOfflineEngine -> "筆電離線道路路線已規劃"
-                    else -> "線上道路路線已規劃"
-                }
+                routingMessage = if (result.route.fromCache) "已載入快取路線（離線模式）" else "道路路線已規劃"
             }
             is RouteResult.Error -> {
                 routingMessage = result.message
@@ -257,7 +253,7 @@ fun NavigationMap(
             }
         }
         Text(
-            "© OpenStreetMap contributors · OpenFreeMap · OSRM | 僅供展示",
+            "© OpenStreetMap contributors · OpenFreeMap · OSRM 示範路由 | 僅供展示",
             modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface,
