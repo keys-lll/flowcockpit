@@ -208,9 +208,8 @@ private fun MicRail(
 
     Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.fillMaxHeight().padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -224,21 +223,27 @@ private fun MicRail(
                     color = Color(0xFF64B5F6),
                 )
             }
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                MicButton(micState, onPressed, onReleased)
+                Text(
+                    text = when (micState) {
+                        MicState.Idle -> "按住說話"
+                        MicState.Listening -> "聆聽中\\n放開送出"
+                        MicState.Processing -> "AI 處理中"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
             TextButton(onClick = { hostInput = aiBoxHost; showHostDialog = true }) {
                 Text("連線設定")
             }
-            MicButton(micState, onPressed, onReleased)
-            Text(
-                text = when (micState) {
-                    MicState.Idle -> "按住說話"
-                    MicState.Listening -> "聆聽中\n放開送出"
-                    MicState.Processing -> "AI 處理中"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 16.dp),
-            )
         }
     }
 }
