@@ -284,6 +284,15 @@ def convert_bc_places_to_candidates(bc_places: List[Dict[str, Any]]) -> List[Dic
 # ==========================================
 app = FastAPI(title="FlowCockpit Backend Module D")
 
+@app.get("/api/ui")
+async def current_ui(task_id: str = "demo_task_001"):
+    """Read-only current UI snapshot, used by Android to recover a missed socket update."""
+    task = StateManager.get_or_create_task(task_id)
+    return {
+        "cloud_status": task.get("cloud_status") or "idle",
+        "ui": UIGenerator.build_ui_json(task),
+    }
+
 @app.get("/api/connectivity")
 async def connectivity():
     """Report D connectivity separately from whether the cloud provider is configured."""
@@ -626,7 +635,12 @@ async def handle_audio_pipeline(
 
     await manager.broadcast(UIGenerator.build_ui_json(task))
     schedule_cloud_comparison(task)
-    return {"status": "ok", "version": task["version"], "candidates_count": len(candidates)}
+    return {
+        "status": "ok",
+        "version": task["version"],
+        "candidates_count": len(candidates),
+        "ui": UIGenerator.build_ui_json(task),
+    }
 
 @app.get("/", response_class=HTMLResponse)
 async def get_demo_dashboard():
