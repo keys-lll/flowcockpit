@@ -77,6 +77,7 @@ class HttpAiBox(
                     _connectivity.value = false to "無法檢查"
                 } else {
                     _connectivity.value = true to when (status) {
+                        "configured" -> "雲端 AI 已設定"
                         "ready" -> "服務就緒（未驗證 API）"
                         "offline_only" -> "離線模式"
                         else -> "雲端服務不可用"
