@@ -220,8 +220,8 @@ private fun MicRail(
                 )
                 Text(
                     connectivity.second,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Blue,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF64B5F6),
                 )
             }
             TextButton(onClick = { hostInput = aiBoxHost; showHostDialog = true }) {
