@@ -14,6 +14,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
+# Support both the repository-level .env.example and a deployment-specific
+# .env beside the integrated services. Never print environment values.
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+if load_dotenv is not None:
+    load_dotenv(ROOT / ".env", override=False)
+    load_dotenv(ROOT.parent / ".env", override=False)
+
 
 def dependency_check(include_bc: bool, include_cloud: bool) -> list[str]:
     required = ["fastapi", "uvicorn", "httpx", "multipart"]
